@@ -1,6 +1,7 @@
 const { Client, Interaction, ApplicationCommandOptionType, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
+    deleted: true,
     name: 'kick',
     description: 'Kick!!!',
     devOnly: true,
