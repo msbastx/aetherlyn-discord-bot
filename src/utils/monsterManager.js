@@ -2,11 +2,14 @@ const Monster = require("../models/monsterSchema");
 
 class MonsterManager {
     // Add a new monster to the database
-    static async addMonster(name, hp, attack, abilities = []) {
+    static async addMonster(name, hp, attack, defense, speed, abilities) {
         const existingMonster = await Monster.findOne({ name });
-        if (existingMonster) return false; // Prevent duplicate monsters
-
-        const newMonster = new Monster({ name, hp, attack, abilities });
+        if (existingMonster) return false;
+    
+        const newMonster = new Monster({
+            name, hp, attack, defense, speed, abilities
+        });
+    
         await newMonster.save();
         return true;
     }

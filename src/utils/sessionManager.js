@@ -1,5 +1,7 @@
 const Session = require("../models/sessionSchema");
 const MonsterManager = require("./monsterManager");
+const Monster = require("../models/monsterSchema");
+const crypto = require("crypto");
 
 class SessionManager {
     async createSession(sessionId, moderatorId) {
@@ -10,14 +12,20 @@ class SessionManager {
         return true;
     }
 
-    async joinSession(sessionId, playerId) {
+    async joinSession(sessionId, userId) {
         const session = await Session.findOne({ sessionId });
-        if (!session) return false;
-
-        if (!session.players.includes(playerId)) {
-            session.players.push(playerId);
+    
+        if (!session) return false; // Session not found
+    
+        if (!session.players) session.players = []; // Ensure it's an array
+        if (!session.players.includes(userId)) {
+            session.players.push(userId);
             await session.save();
+            console.log(`✅ User ${userId} joined session ${sessionId}. Updated players:`, session.players);
+        } else {
+            console.log(`⚠️ User ${userId} is already in session ${sessionId}`);
         }
+    
         return true;
     }
 
@@ -35,51 +43,67 @@ class SessionManager {
         return true;
     }
 
-    async getSession(sessionId) {
+    static async getSession(sessionId) {
         return await Session.findOne({ sessionId });
     }
 
     // Add a random monster from the database
     static async addRandomMonster(sessionId) {
         const session = await Session.findOne({ sessionId });
-        if (!session) return false;
-
-        const monster = await MonsterManager.getRandomMonster();
+        if (!session) return "❌ Session not found.";
+    
+        const monster = await Monster.findOne().sort({ _id: -1 }); // Get a random monster
         if (!monster) return "❌ No monsters available in the database.";
-
+    
         const monsterInstance = {
             name: monster.name,
             hp: monster.hp,
             attack: monster.attack,
+            defense: monster.defense || 0,
+            speed: monster.speed || 0,
+            abilities: monster.abilities || [],
             id: crypto.randomBytes(2).toString("hex"),
         };
-
+    
+        // ✅ Ensure `monsters` and `turnOrder` exist as arrays
+        if (!Array.isArray(session.monsters)) session.monsters = [];
+        if (!Array.isArray(session.turnOrder)) session.turnOrder = [];
+    
         session.monsters.push(monsterInstance);
         session.turnOrder.push(monsterInstance.id);
         await session.save();
-
+    
         return `👹 A wild **${monster.name}** appears!`;
     }
 
     // Add a specific monster by name from the database
     static async addMonsterByName(sessionId, monsterName) {
-        const session = await Session.findOne({ sessionId });
+        const session = await Session.findOne({ sessionId }).select("monsters turnOrder");
         if (!session) return false;
-
-        const monster = await MonsterManager.getMonsterByName(monsterName);
-        if (!monster) return `❌ No monster named **${monsterName}** found in the database.`;
-
+    
+        const monster = await Monster.findOne({ name: monsterName });
+        if (!monster) return `❌ No monster named **${monsterName}** found.`;
+    
         const monsterInstance = {
             name: monster.name,
             hp: monster.hp,
             attack: monster.attack,
+            defense: monster.defense || 0,
+            speed: monster.speed || 0,
+            abilities: monster.abilities || [],
             id: crypto.randomBytes(2).toString("hex"),
         };
-
-        session.monsters.push(monsterInstance);
-        session.turnOrder.push(monsterInstance.id);
-        await session.save();
-
+    
+        await Session.updateOne(
+            { sessionId },
+            { 
+                $push: { 
+                    monsters: monsterInstance, 
+                    turnOrder: monsterInstance.id 
+                } 
+            }
+        );
+    
         return `👹 **${monster.name}** joins the battle!`;
     }
 
@@ -93,6 +117,15 @@ class SessionManager {
             { $push: { monsters: monster} },
             { new: true }
         );
+    }
+
+    async setBattleState(sessionId, battleState) {
+        const session = await Session.findOne({ sessionId });
+        if (!session) return false;
+
+        session.battleState = battleState;
+        await session.save();
+        return true;
     }
 }
 
