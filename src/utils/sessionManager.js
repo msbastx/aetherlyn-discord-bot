@@ -29,7 +29,7 @@ class SessionManager {
         return true;
     }
 
-    async leaveSession(sessionId, playerId) {
+    static async leaveSession(sessionId, playerId) {
         const session = await Session.findOne({ sessionId });
         if (!session) return false;
 
@@ -38,13 +38,20 @@ class SessionManager {
         return true;
     }
 
-    async endSession(sessionId) {
+    static async endSession(sessionId) {
         await Session.deleteOne({ sessionId });
         return true;
     }
 
     static async getSession(sessionId) {
-        return await Session.findOne({ sessionId });
+        const session = await Session.findOne({ sessionId });
+        if (!session) {
+            console.log("Session not found.");
+            return null;
+        }
+    
+        console.log("Retrieved session:", session);
+        return session;
     }
 
     // Add a random monster from the database
@@ -119,12 +126,27 @@ class SessionManager {
         );
     }
 
-    async setBattleState(sessionId, battleState) {
+    static async setBattleState(sessionId, battleState) {
+        const session = await Session.findOne({ sessionId });
+        if (!session) {
+            console.log("Session not found.");
+            return false;
+        }
+    
+        session.battleState = battleState;
+        await session.save();
+        console.log("Battle state saved:", session.battleState);
+        return true;
+    }
+
+    static async endBattle(sessionId) {
         const session = await Session.findOne({ sessionId });
         if (!session) return false;
 
-        session.battleState = battleState;
+        // Clear the battle state
+        session.battleState = null;
         await session.save();
+
         return true;
     }
 }

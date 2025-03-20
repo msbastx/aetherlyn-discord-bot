@@ -56,22 +56,53 @@ module.exports = {
             if (!session) {
                 return interaction.reply({ 
                     content: "❌ Session not found.", 
-                    flags: MessageFlags.Ephemeral  // ✅ Replaces "ephemeral: true"
+                    flags: MessageFlags.Ephemeral
                 });
             }
         
-            const battleEmbed = BattleManager.createBattleEmbed(session.participants);
+            // Ensure battleState exists
+            if (!session.battleState || !session.battleState.participants) {
+                return interaction.reply({ 
+                    content: "❌ No active battle found for this session.", 
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+        
+            const { participants, turnIndex } = session.battleState;
+        
+            // Log the participants array
+            console.log("Participants:", JSON.stringify(participants, null, 2));
+        
+            // Separate players and monsters from participants
+            const players = participants.filter((p) => p.type === "Player");
+            const monsters = participants.filter((p) => p.type === "Monster");
+        
+            // Generate turnOrder from participants
+            const turnOrder = participants
+                .sort((a, b) => b.speed - a.speed)
+                .map((entity) => entity.id);
+        
+            console.log("Players:", players);
+            console.log("Monsters:", monsters);
+            console.log("Turn Order:", turnOrder);
+        
+            // Create and send embed
+            const battleEmbed = BattleManager.createBattleEmbed(players, monsters, turnOrder);
             return interaction.reply({ embeds: [battleEmbed] });
         }
 
         else if (subcommand === "end") {
+            const sessionId = interaction.options.getString("session_id");
             const session = await SessionManager.getSession(sessionId);
+        
             if (!session) {
                 return interaction.reply({ content: "❌ Session not found.", ephemeral: true });
             }
-
-            await SessionManager.endSession(sessionId);
-            return interaction.reply("✅ The battle session has been ended.");
+        
+            // End the battle (clear battle state)
+            await SessionManager.endBattle(sessionId);
+        
+            return interaction.reply("✅ The battle has ended, but the session is still active.");
         }
     }
 };

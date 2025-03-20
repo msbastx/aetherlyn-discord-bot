@@ -64,18 +64,6 @@ module.exports = {
                 )
         ),
 
-    async autocomplete(interaction) {
-        const focusedValue = interaction.options.getFocused();
-        const monsters = await Monster.find({}, "name").limit(25);
-        console.log(monsters);
-
-        const filtered = monsters
-            .filter(monster => monster.name.toLowerCase().includes(focusedValue.toLowerCase()))
-            .map(monster => ({ name: monster.name, value: monster.name }));
-    
-        await interaction.respond(filtered.length ? filtered : [{ name: "No matches found", value: "none" }]);
-    },
-
     async run({ interaction }) {
         const subcommand = interaction.options.getSubcommand();
         const userId = interaction.user.id;
@@ -138,38 +126,54 @@ module.exports = {
                 if (!sessionToEnd) return interaction.reply("❌ Session not found.");
                 if (sessionToEnd.moderatorId !== userId) return interaction.reply("❌ Only the moderator can end this session.");
 
-                await sessionManager.endSession(sessionId);
+                await SessionManager.endSession(sessionId);
                 return interaction.reply(`🛑 Session **${sessionId}** has been ended.`);
             }
 
             case "addmonster": {
-                const activeSession = await SessionManager.getActiveSession(userId);
-                if (!activeSession) {
-                    return interaction.reply({ content: "❌ You don't have an active session.", ephemeral: true });
+                try {
+                    // Defer the reply immediately
+                    await interaction.deferReply({ ephemeral: true });
+            
+                    // Fetch the active session
+                    const activeSession = await SessionManager.getActiveSession(userId);
+                    if (!activeSession) {
+                        return interaction.editReply({ content: "❌ You don't have an active session.", ephemeral: true });
+                    }
+            
+                    // Check if the user is the moderator
+                    if (activeSession.moderatorId !== userId) {
+                        return interaction.editReply({ content: "❌ Only the moderator can add monsters.", ephemeral: true });
+                    }
+            
+                    const sessionId = activeSession.sessionId;
+                    const monsterName = interaction.options.getString("name");
+            
+                    let result;
+            
+                    // Add the monster
+                    if (monsterName) {
+                        result = await SessionManager.addMonsterByName(sessionId, monsterName);
+                    } else {
+                        result = await SessionManager.addRandomMonster(sessionId);
+                    }
+            
+                    // Handle the result
+                    if (!result) {
+                        result = "❌ An error occurred while adding the monster.";
+                    }
+            
+                    // Edit the deferred reply
+                    await interaction.editReply({ content: result });
+                } catch (error) {
+                    console.error("Error in addmonster subcommand:", error);
+                    if (error.code === 10062) {
+                        await interaction.followUp({ content: "❌ The interaction expired. Please try again.", ephemeral: true });
+                    } else {
+                        await interaction.followUp({ content: "❌ An unexpected error occurred.", ephemeral: true });
+                    }
                 }
-
-                if (activeSession.moderatorId !== userId) {
-                    return interaction.reply({ content: "❌ Only the moderator can add monsters.", ephemeral: true });
-                }
-
-                const sessionId = activeSession.sessionId;
-                const monsterName = interaction.options.getString("name");
-
-                await interaction.deferReply({ ephemeral: true });
-
-                let result;
-
-                if (monsterName) {
-                    result = await SessionManager.addMonsterByName(sessionId, monsterName);
-                } else {
-                    result = await SessionManager.addRandomMonster(sessionId);
-                }
-
-                if (!result) {
-                    result = "❌ An error occurred while adding the monster.";
-                }
-
-                return interaction.editReply({ content: result });
+                break;
             }
 
             case "startbattle": {
